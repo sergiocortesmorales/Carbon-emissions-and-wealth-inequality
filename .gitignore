@@ -6,3 +6,6 @@
 .DS_Store
 .quarto
 *.rds
+*.csv
+data/
+rawdata/
