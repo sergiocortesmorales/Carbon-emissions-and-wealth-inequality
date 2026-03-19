@@ -11,9 +11,9 @@ panel <- panel %>%
     log_gini            = log10(postinc_gini)
   )
 
-######################
-### KNIGHT REPLICA ###
-######################
+#############################
+### KNIGHT ET AL. REPLICA ###
+#############################
 knight_countries <- c("AUS", "AUT", "BEL", "CAN", "CZE", "DNK", "FIN", 
                       "FRA", "DEU", "GRC", "IRL", "ISR", "ITA", "JPN", 
                       "NLD", "NZL", "NOR", "POL", "PRT", "SGP", "KOR", 
