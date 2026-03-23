@@ -1,3 +1,8 @@
+#Install and load packages
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(here, dplyr, tidyr, countrycode)
+
+# Read cleaned data
 
 ineq <- readRDS(here("data", "ineq.rds"))
 emis <- readRDS(here("data", "emis.rds"))
@@ -38,7 +43,9 @@ for (start in 1991:2005) {
   for (end in 2015:2023) {
     bp <- panel %>%
       filter(year >= start, year <= end) %>%
-      filter(!is.na(wid_co2_consumption), !is.na(co2_per_capita), !is.na(wealth_top1), !is.na(wealth_top10), !is.na(gdp_pc), !is.na(preinc_gini), !is.na(postinc_gini)) %>%
+      filter(!is.na(co2pc_consumption_wid), !is.na(co2pc_territorial_wid), !is.na(ghgpc_consumption_wid),!is.na(ghgpc_territorial_wid),#!is.na(co2pc_territorial), !is.na(co2pc_consumption), !is.na(ghgpc_territorial_excluc), !is.na(ghgpc_territorial), !is.na(wealth_top1), !is.na(wealth_top10),
+             !is.na(preinc_gini), !is.na(postinc_gini),
+             !is.na(gdppc), !is.na(urban), !is.na(age_dep), !is.na(pop_growth)) %>%
       group_by(iso3c) %>%
       filter(n() == (end - start + 1)) %>%
       ungroup()
@@ -51,18 +58,18 @@ for (start in 1991:2005) {
   }
 }
 balanced_core %>% arrange(desc(obs)) %>% head(20) #1991-2020
+rm(end, start, balanced_core, bp)
 ### Build balanced panel
 panel <- panel %>%
   filter(year >= 1991, year <= 2020) %>%
-  filter(!is.na(wid_co2_consumption), !is.na(co2_per_capita), 
-         !is.na(wealth_top1), !is.na(wealth_top10), 
-         !is.na(gdp_pc), !is.na(preinc_gini), !is.na(postinc_gini)) %>%
+  filter(!is.na(co2pc_consumption_wid), !is.na(co2pc_territorial_wid), !is.na(ghgpc_consumption_wid),!is.na(ghgpc_territorial_wid),#!is.na(co2pc_territorial), !is.na(co2pc_consumption), !is.na(ghgpc_territorial_excluc), !is.na(ghgpc_territorial),
+         !is.na(wealth_top1), !is.na(wealth_top10),
+         !is.na(preinc_gini), !is.na(postinc_gini),
+         !is.na(gdppc), !is.na(urban), !is.na(age_dep), !is.na(pop_growth))  %>%
   group_by(iso3c) %>%
   filter(n() == 30) %>%
   ungroup()
 
-cat("Countries:", n_distinct(panel$iso3c), "\n")
-cat("Years:", n_distinct(panel$year), "\n")
-cat("Observations:", nrow(panel), "\n")
+cat("Countries:", n_distinct(panel$iso3c), "\n", "Years:", n_distinct(panel$year), "\n", "Observations:", nrow(panel), "\n")
 
 saveRDS(panel, here("data", "panel.rds"))

@@ -81,11 +81,12 @@ emis_wid <- emis_wid %>%
   select(country, iso2c, iso3c, year, variable, value) %>%
   pivot_wider(names_from = variable, values_from = value) %>%
   rename(
-    wid_co2_territorial = kntcar,
-    wid_co2_consumption   = knfcar,
-    wid_ghg_territorial = kntghg,
-    wid_ghg_consumption   = knfghg
+    co2pc_territorial_wid = kntcar,
+    co2pc_consumption_wid   = knfcar,
+    ghgpc_territorial_wid = kntghg,
+    ghgpc_consumption_wid   = knfghg
   )
+### SAVE ###
 saveRDS(emis_wid, here("data", "emis_wid.rds"))
 
 
@@ -94,10 +95,10 @@ saveRDS(emis_wid, here("data", "emis_wid.rds"))
                 #################
                 ### EMISSIONS ###
                 #################
-emis <- read.csv(here("rawdata","owid-co2-data.csv")) %>% #Read
+emis <-  read.csv(here("rawdata","owid-co2-data.csv"))#Read
 #Select columns, year range, and drop regions
-rename(iso3c = iso_code) %>%
-select(country, iso3c, year, co2_per_capita, co2_including_luc_per_capita, ghg_excluding_lucf_per_capita, ghg_per_capita,  consumption_co2_per_capita) %>%
+emis <- emis %>% rename(iso3c = iso_code, co2pc_territorial = co2_per_capita, co2pc_territorial_incluc = co2_including_luc_per_capita, co2pc_consumption = consumption_co2_per_capita, ghgpc_territorial_excluc = ghg_excluding_lucf_per_capita, ghgpc_territorial = ghg_per_capita) %>%
+select(country, iso3c, year, co2pc_territorial, co2pc_territorial_incluc, ghgpc_territorial_excluc, ghgpc_territorial,  co2pc_consumption) %>%
 filter(year >= 1991 & year <= 2023) %>%
 filter(iso3c != "") %>%
 filter(!country %in% c("Antarctica", "Christmas Island", "Monaco", "San Marino", "Vatican"))
@@ -110,11 +111,11 @@ saveRDS(emis, here("data", "emis.rds"))
                 ### WORLD BANK INDICATORS ###
                 #############################
 ctrl <- readRDS(here("rawdata", "ctrl_raw.rds")) #Read
-ctrl <- ctrl %>%
-#Drop irrelevant columns
+ctrl <- ctrl %>% #Drop irrelevant columns
 select(-status, -lastupdated, -longitude, -latitude, -lending, -capital) %>%
 #Drop indicators not (yet) needed for the analysis
-select(country, iso2c, iso3c, year, gdp_pc, region, income) %>%
+select(country, iso2c, iso3c, year, gdppc, age_dep, pop_growth, urban, internet, trade,
+       region, income) %>%
 mutate(region = case_when(
 iso2c == "PR" ~ "Latin America & Caribbean",
 iso2c == "SO" ~ "Sub-Saharan Africa",
@@ -122,4 +123,6 @@ TRUE ~ region
 )) %>%
 filter(region != "Aggregates") %>%
 filter(!is.na(region))
+### SAVE ###
 saveRDS(ctrl, here("data", "ctrl.rds"))
+print("saved")

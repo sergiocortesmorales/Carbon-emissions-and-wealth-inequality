@@ -1,172 +1,375 @@
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(here, dplyr, fixest, pcse, prais, haven, broom, modelsummary)
-
+pacman::p_load(here, dplyr, fixest, pcse, prais, haven, broom, modelsummary, plm, lmtest, sandwich, pgmm, car)
 panel <- readRDS(here("data", "panel.rds"))
-panel <- panel %>%
-  mutate(
-    log_wid_co2_pc      = log10(wid_co2_consumption),
-    log_co2_pc          = log10(consumption_co2_per_capita),
-    log_wealth_top10    = log10(wealth_top10),
-    log_gdp_pc          = log10(gdp_pc),
-    log_gini            = log10(postinc_gini)
-  )
-
-#############################
-### KNIGHT ET AL. REPLICA ###
-#############################
-knight_countries <- c("AUS", "AUT", "BEL", "CAN", "CZE", "DNK", "FIN", 
-                      "FRA", "DEU", "GRC", "IRL", "ISR", "ITA", "JPN", 
-                      "NLD", "NZL", "NOR", "POL", "PRT", "SGP", "KOR", 
-                      "ESP", "SWE", "CHE", "GBR", "USA")
-#Load credit suisse
-
-cs_wealth <- read.csv(here("rawdata", "creditsuisse2010.csv"))
-cs_wealth <- cs_wealth %>%                    
-  pivot_longer(
-    cols = -country, 
-    names_to = "year", 
-    values_to = "wealth_top10_cs"
-  ) %>%
-  mutate(
-    year = as.numeric(gsub("X", "", year)) # Strips the 'X' before converting
-  )
-
-#Build balanced panel: 26 countries, 2000-2010
-knight <- panel %>%
-  filter(iso3c %in% knight_countries, year >= 2000, year <= 2010) %>%
-  # Keep only country-years with all required variables
-  filter(!is.na(wid_co2_consumption) & wid_co2_consumption > 0,
-         !is.na(wealth_top10) & wealth_top10 > 0,
-         !is.na(gdp_pc) & gdp_pc > 0,
-         !is.na(postinc_gini) & postinc_gini > 0) %>%
-  # Merge Credit Suisse data by country and year
-  left_join(cs_wealth, by = c("country", "year")) %>%
-  filter(!is.na(wealth_top10_cs) & wealth_top10_cs > 0)
-
-#Check balance
-cat("Countries:", n_distinct(knight$iso3c), "\n")
-cat("Years:", n_distinct(knight$year), "\n")
-cat("Observations:", nrow(knight), "\n")
-table(knight$iso3c)
-knight <- knight %>%
-  mutate(
-    log_wid_co2_pc      = log10(wid_co2_consumption),
-    log_co2_pc          = log10(consumption_co2_per_capita),
-    log_wealth_top10_cs = log10(wealth_top10_cs),
-    log_wealth_top10    = log10(wealth_top10),
-    log_gdp_pc          = log10(gdp_pc),
-    log_gini            = log10(postinc_gini)
-  )
-
-#write_dta(knight, here("data", "knight.dta")) #FOR STATA REPLICATION
-
-# Step 1 (prais-winsten coefficients)
-k_wid_pw <- prais_winsten(log_wid_co2_pc ~ log_wealth_top10_cs + log_gdp_pc + log_gini + 
-                            factor(iso3c) + factor(year),
-                          data = knight,
-                          index = c("iso3c", "year"),
-                          panelwise = FALSE)
-summary(k_wid_pw)
-# Step 2: (correct standard errors)
-k_wid_lm <- lm(log_wid_co2_pc ~ log_wealth_top10_cs + log_gdp_pc + log_gini + 
-                 factor(iso3c) + factor(year),
-               data = knight)
-coeftest(k_wid_lm, vcov = vcovPC(k_wid_lm, cluster = ~ iso3c + year, pairwise = TRUE))
-
-### COMPARING CREDIT SUISSE WITH WID TOP 10% SHARE DATA
-### Checking global data
-knight %>%
-  select(country, year, wealth_top10, wealth_top10_cs) %>%
-  mutate(diff = wealth_top10 - wealth_top10_cs/100) %>%  # CS might be in % not fraction
-  summary() ## Similar global data structure
-
-### Checking within country trends
-knight %>%
-  mutate(cs_fraction = wealth_top10_cs / 100) %>%
-  group_by(iso3c) %>%
-  summarise(
-    wid_trend = cor(year, wealth_top10),
-    cs_trend = cor(year, cs_fraction)
-  ) %>%
-  mutate(trend_agrees = sign(wid_trend) == sign(cs_trend)) %>%
-  print(n = 26)
-### Half of the countries change trend.
-### This seems to explain most of the difference between the Knight study and replicating with WID data
-
-###########################################
-###########################################
-
 # Log-transform key variables
+
 panel <- panel %>%
-  filter(!is.na(co2_per_capita) & !is.na(wealth_top1) & !is.na(gdp_pc)) %>%
-  filter(co2_per_capita > 0 & wealth_top1 > 0 & gdp_pc > 0) %>%
   mutate(
-    ln_co2_pc = log(co2_per_capita),
-    ln_wid_co2_pc = log(wid_co2_consumption),
-    ln_cons_co2_pc = log(consumption_co2_per_capita),
-    ln_wealth_top1 = log(wealth_top1),
+    ln_co2pc_territorial = log(co2pc_territorial),
+    ln_co2pc_territorial_wid = log(co2pc_territorial_wid),
+    ln_co2pc_consumption = log(co2pc_consumption),
+    ln_co2pc_consumption_wid = log(co2pc_consumption_wid),
+    ln_ghgpc_territorial_excluc = log(ghgpc_territorial_excluc),
+    ln_ghgpc_territorial_wid = log(ghgpc_territorial_wid),
+    
     ln_wealth_top10 = log(wealth_top10),
-    ln_gdp_pc = log(gdp_pc),
+    ln_wealth_top1 = log(wealth_top1),
+    ln_wealth_rest9 = log(wealth_rest9),
     ln_preinc_gini = log(preinc_gini),
-    ln_postinc_gini = log(postinc_gini)
+    ln_postinc_gini = log(postinc_gini),
+    
+    ln_gdppc = log(gdppc),
+    ln_gdppc_sq = ln_gdppc^2,
+    ln_urban = log(urban),
+    ln_age_dep = log(age_dep),
   )
-### CO2 COMP WID at W TOP 10%
-# Step 1 (prais-winsten coefficients)
-wid_pw <- prais_winsten(ln_wid_co2_pc ~ ln_wealth_top10 + ln_gdp_pc + ln_preinc_gini + 
-                          factor(iso3c) + factor(year),
-                        data = panel,
-                        index = c("iso3c", "year"),
-                        panelwise = FALSE)
-s <- summary(wid_pw)
-df <- as.data.frame(s$coefficients)
-df <- df[!grepl("factor", rownames(df)), ]
-df$stars <- ifelse(df$`Pr(>|t|)` < 0.001, "***",
-            ifelse(df$`Pr(>|t|)` < 0.01, "**",
-            ifelse(df$`Pr(>|t|)` < 0.05, "*",
-            ifelse(df$`Pr(>|t|)` < 0.1, ".", ""))))
-df
-# Step 2: (correct standard errors)
-wid_lm <- lm(ln_wid_co2_pc ~ ln_wealth_top10 + ln_gdp_pc + ln_preinc_gini + 
-                 factor(iso3c) + factor(year),
-               data = panel)
-coeftest(wid_lm, vcov = vcovPC(wid_lm, cluster = ~ iso3c + year, pairwise = TRUE))
-#***
-### CO2 COMP WID at W TOP 1%
-# Step 1 (prais-winsten coefficients)
-wid_pw <- prais_winsten(ln_wid_co2_pc ~ ln_wealth_top1 + ln_gdp_pc + ln_preinc_gini + 
-                          factor(iso3c) + factor(year),
-                        data = panel,
-                        index = c("iso3c", "year"),
-                        panelwise = FALSE)
-s <- summary(wid_pw)
-df <- as.data.frame(s$coefficients)
-df <- df[!grepl("factor", rownames(df)), ]
-df$stars <- ifelse(df$`Pr(>|t|)` < 0.001, "***",
-            ifelse(df$`Pr(>|t|)` < 0.01, "**",
-            ifelse(df$`Pr(>|t|)` < 0.05, "*",
-            ifelse(df$`Pr(>|t|)` < 0.1, ".", ""))))
-df
-# Step 2: (correct standard errors)
-wid_lm <- lm(ln_wid_co2_pc ~ ln_wealth_top1 + ln_gdp_pc + ln_preinc_gini + 
-               factor(iso3c) + factor(year),
-             data = panel)
-coeftest(wid_lm, vcov = vcovPC(wid_lm, cluster = ~ iso3c + year, pairwise = TRUE))
+##########################
+### PRAIS-WINSTEN 2WFE ###
+##########################
+###################################################################
+### CO2 COMP WID ~ W TOP 10%
+# prais-winsten coefficients
+rpw_co2wid <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10 + ln_gdppc + ln_preinc_gini +
+  factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2wid, pairwise = TRUE)
+trpw_co2wid <- coeftest(rpw_co2wid, vcov = vcov_corrected)
+trpw_co2wid <- trpw_co2wid[!grepl("factor", rownames(trpw_co2wid)), ]
+class(trpw_co2wid) <- "coeftest"
+trpw_co2wid # NON-SIGNIFICANT RELATION
 
-# INTERACTING TOP SHARE WITH GDP
-wid_pw_int <- prais_winsten(
-  ln_wid_co2_pc ~ ln_wealth_top10 * ln_gdp_pc + ln_preinc_gini + 
+### CO2 COMP WID ~ W TOP 1%
+# prais-winsten coefficients
+rpw_co2wid <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1 + ln_gdppc + ln_preinc_gini +
+  factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2wid, pairwise = TRUE)
+trpw_co2wid <- coeftest(rpw_co2wid, vcov = vcov_corrected)
+trpw_co2wid <- trpw_co2wid[!grepl("factor", rownames(trpw_co2wid)), ]
+class(trpw_co2wid) <- "coeftest"
+trpw_co2wid # NON-SIGNIFICANT RELATION
+
+###################################################################
+### CO2 COMP WID ~ W TOP 10% Interact
+# prais-winsten coefficients
+rpw_co2_ekc <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc + preinc_gini +
+  factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
+trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
+class(trpw_co2_ekc) <- "coeftest"
+trpw_co2_ekc # SIGNIFICANT RELATION
+
+### CO2 COMP WID ~ WTOP1%*GDPPC
+# prais-winsten coefficients
+rpw_co2_ekc <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc +
+  ln_preinc_gini +
+  factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
+trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
+class(trpw_co2_ekc) <- "coeftest"
+trpw_co2_ekc
+
+#################### Adding controls #################
+### CO2 COMP WID ~ WTOP10%*GDPPC
+# prais-winsten coefficients
+rpw_co2_ekc <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc +
+  ln_preinc_gini + pop_growth + ln_urban + ln_age_dep +
+  factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
+trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
+class(trpw_co2_ekc) <- "coeftest"
+trpw_co2_ekc
+
+### CO2 COMP WID ~ WTOP1%*GDPPC - rest 9% controlled
+# prais-winsten coefficients
+rpw_co2_ekc <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + ln_wealth_rest9 +
+  ln_preinc_gini + pop_growth + ln_urban + ln_age_dep +
+  factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
+trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
+class(trpw_co2_ekc) <- "coeftest"
+trpw_co2_ekc
+
+#################### Adding TRADE OPENESS AND INSTITUTIONAL #################
+#################### TRADE FROM CEPII OR PWT ################################
+#################### INSTI FROM V-DEM,QoG(ht_ipolity2),Freedom house,ICRG ###
+#################### Why renewable energy?
+### CO2 COMP WID ~ WTOP10%*GDPPC
+# prais-winsten coefficients
+rpw_co2_ekc <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc +
+    ln_preinc_gini + pop_growth + ln_urban + ln_age_dep +
     factor(iso3c) + factor(year),
-  data = panel,
-  index = c("iso3c", "year"),
-  panelwise = FALSE)
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
+trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
+class(trpw_co2_ekc) <- "coeftest"
+trpw_co2_ekc
 
-s <- summary(wid_pw_int)
-df <- as.data.frame(s$coefficients)
-df <- df[!grepl("factor", rownames(df)), ]
-df$stars <- ifelse(df$`Pr(>|t|)` < 0.001, "***",
-            ifelse(df$`Pr(>|t|)` < 0.01, "**",
-            ifelse(df$`Pr(>|t|)` < 0.05, "*",
-            ifelse(df$`Pr(>|t|)` < 0.1, ".", ""))))
-df
+### CO2 COMP WID ~ WTOP1%*GDPPC - rest 9% controlled
+# prais-winsten coefficients
+rpw_co2_ekc <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + ln_wealth_rest9 +
+    ln_preinc_gini + pop_growth + ln_urban + ln_age_dep +
+    factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+# Get PCSE corrected vcov matrix
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
+trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
+class(trpw_co2_ekc) <- "coeftest"
+trpw_co2_ekc
+
+#########################################################
+################## Drop tests ###########################
+#########################################################
+
+# ============================================================
+# LEAVE-ONE-OUT ROBUSTNESS — PRAIS-WINSTEN
+# ============================================================
+
+countries <- unique(panel$iso3c)
+n_countries <- length(countries)
+
+loo_results <- data.frame(
+  dropped = character(),
+  coef_w1 = numeric(),
+  p_w1    = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (i in seq_along(countries)) {
+  c <- countries[i]
+  cat(sprintf("Running %d/%d: %s\n", i, n_countries, c))
+  
+  tryCatch({
+    rpw_loo <- prais_winsten(
+      ln_co2pc_consumption_wid ~ ln_wealth_top1 * ln_gdppc +
+        ln_wealth_rest9 + ln_preinc_gini + pop_growth +
+        ln_urban + ln_age_dep +
+        factor(iso3c) + factor(year),
+      data      = panel %>% filter(iso3c != c),
+      index     = c("iso3c", "year"),
+      panelwise = FALSE
+    )
+    
+    s <- summary(rpw_loo)$coefficients
+    
+    loo_results <- rbind(loo_results, data.frame(
+      dropped = c,
+      coef_w1 = s["ln_wealth_top1", "Estimate"],
+      p_w1    = s["ln_wealth_top1", "Pr(>|t|)"],
+      stringsAsFactors = FALSE
+    ))
+    
+  }, error = function(e) {
+    cat(sprintf("  Failed for %s: %s\n", c, e$message))
+    loo_results <<- rbind(loo_results, data.frame(
+      dropped = c,
+      coef_w1 = NA,
+      p_w1    = NA,
+      stringsAsFactors = FALSE
+    ))
+  })
+}
+
+# ============================================================
+# SUMMARY OF RESULTS
+# ============================================================
+
+cat("\n=== Leave-One-Out Summary ===\n")
+cat(sprintf("Total countries tested : %d\n", nrow(loo_results)))
+cat(sprintf("Significant (p<0.05)   : %d (%.1f%%)\n",
+            sum(loo_results$p_w1 < 0.05, na.rm = TRUE),
+            mean(loo_results$p_w1 < 0.05, na.rm = TRUE) * 100))
+cat(sprintf("Significant (p<0.10)   : %d (%.1f%%)\n",
+            sum(loo_results$p_w1 < 0.10, na.rm = TRUE),
+            mean(loo_results$p_w1 < 0.10, na.rm = TRUE) * 100))
+cat(sprintf("Mean coefficient       : %.4f\n",
+            mean(loo_results$coef_w1, na.rm = TRUE)))
+cat(sprintf("Coefficient range      : %.4f to %.4f\n",
+            min(loo_results$coef_w1, na.rm = TRUE),
+            max(loo_results$coef_w1, na.rm = TRUE)))
+
+# Countries whose exclusion kills significance
+cat("\n--- Countries that kill significance when dropped ---\n")
+loo_results %>%
+  filter(p_w1 >= 0.05) %>%
+  arrange(desc(p_w1)) %>%
+  print()
+
+# Countries whose exclusion strengthens significance
+cat("\n--- Top 10 countries that strengthen result when dropped ---\n")
+loo_results %>%
+  filter(!is.na(p_w1)) %>%
+  arrange(p_w1) %>%
+  head(10) %>%
+  print()
+
+# Coefficient stability plot
+cat("\n--- Coefficient distribution ---\n")
+hist(loo_results$coef_w1,
+     main = "Distribution of ln_wealth_top1 coefficient\nacross leave-one-out samples",
+     xlab = "Coefficient estimate",
+     col  = "steelblue",
+     border = "white")
+abline(v = 0, col = "red", lty = 2, lwd = 2)
 
 
+##########################################################
+####################### Feols ############################
+##########################################################
+
+### CO2 COMP WID ~ WTOP1%*GDPPC - rest 9% controlled
+
+rfe_co2_ekc <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + ln_wealth_rest9 +
+  ln_preinc_gini + pop_growth + ln_urban + ln_age_dep | iso3c + year,
+  data=panel, cluster = ~iso3c
+)
+summary(rfe_co2_ekc)
+
+
+# ============================================================
+# INCOME GROUP DISAGGREGATION
+# ============================================================
+
+
+income_groups <- unique(panel$income)
+for (grp in income_groups) {
+  cat(sprintf("\n=== Income Group: %s ===\n", grp))
+  
+  panel_grp <- panel %>% filter(income == grp)
+  
+  cat(sprintf("Countries: %d, Obs: %d\n", 
+              n_distinct(panel_grp$iso3c), nrow(panel_grp)))
+  
+  tryCatch({
+    rpw_grp <- prais_winsten(
+      ln_co2pc_consumption_wid ~ ln_wealth_top1 * ln_gdppc + 
+        ln_wealth_rest9 + ln_preinc_gini + pop_growth + 
+        ln_urban + ln_age_dep +
+        factor(iso3c) + factor(year),
+      data      = panel_grp,
+      index     = c("iso3c", "year"),
+      panelwise = FALSE
+    )
+    
+    vcov_grp <- prais:::vcovPC.prais(rpw_grp, pairwise = TRUE)
+    res_grp  <- coeftest(rpw_grp, vcov = vcov_grp)
+    res_grp  <- res_grp[!grepl("factor", rownames(res_grp)), ]
+    class(res_grp) <- "coeftest"
+    print(res_grp)
+    
+  }, error = function(e) {
+    cat(sprintf("Could not estimate for %s: %s\n", grp, e$message))
+  })
+}
+### ONLY SIGNIFICANT IN UPPER MIDDLE INCOME IS SIGNIFICANT
+###(EMERGENT, BAD INSTITUIONS)
+# ============================================================
+# SYSTEM GMM — equivalent specification
+# ============================================================
+
+pacman::p_load(pgmm)
+
+# Create interaction term manually for pgmm
+# pgmm does not support formula interactions directly
+panel <- panel %>%
+  mutate(ln_wealth_top1Igdppc = ln_wealth_top1 * ln_gdppc)
+
+# pgmm requires pdata.frame
+pdata_gmm <- pdata.frame(panel, index = c("iso3c", "year"))
+
+# System GMM
+# Dependent variable lagged to capture persistence
+# ln_wealth_top1 treated as endogenous — instrumented with lags
+# Controls treated as predetermined
+
+sgmm <- pgmm(
+  ln_co2pc_consumption_wid ~ lag(ln_co2pc_consumption_wid, 1) +
+    ln_wealth_top1 + ln_gdppc + ln_wealth_top1Igdppc +
+    ln_wealth_rest9 + ln_preinc_gini + pop_growth +
+    ln_urban + ln_age_dep |
+    lag(ln_wealth_top1, 2:4),
+  data        = pdata_gmm,
+  effect      = "twoways",
+  model       = "twosteps",
+  transformation = "d" ### ADRESS NICKEL BIAS WHEN USING "ld"
+)
+
+cat("\n=== System GMM Results ===\n")
+sgmm_summary <- summary(sgmm, robust = TRUE)
+print(sgmm_summary)
+
+# Arellano-Bond tests — validate instrument structure
+# AR(1) should be significant, AR(2) should NOT be significant
+sgmm_summary <- summary(sgmm, robust = TRUE)
+
+# Correct extraction for pgmm summary object
+cat("AR(1) p-value:", sgmm_summary$m1$p.value, "\n")
+cat("AR(2) p-value:", sgmm_summary$m2$p.value, "\n")
+cat("Sargan p-value:", sgmm_summary$sargan$p.value, "\n")
+
+### RESULTS SURVIVE
+# Is this exactly Blundell-Bond two-step?
+
+
+#####CHECK
+########## Group fixed effects
+########## Lewbel IV
+########## Alternative time samples
+########## 2SLS with regional wealth inequality
+########## Placebo test
+########## Alternative wealth measures, alternative income control
+########## Alternative emissions measures
+########## Estimate turning point (apeti table 7 column 5), check if same that EKC
+########## CHANNELS: Democracy, climate change policy, CO2pc as dependent variables
+########## Quantile regression OR MMQR
+########## Descriptive statistics
