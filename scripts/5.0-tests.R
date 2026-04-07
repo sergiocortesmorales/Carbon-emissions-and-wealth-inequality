@@ -13,58 +13,85 @@ pacman::p_load(
   pgmm)
 
 panel <- readRDS(here("data", "panel.rds"))
-cat("Countries:", n_distinct(panel$iso3c), "\n")
-cat("Years:",     n_distinct(panel$year),  "\n")
-cat("Obs:",       nrow(panel),             "\n")
-cat("Columns:",   paste(names(panel), collapse = ", "), "\n")
+# Log-transform key variables
 
 panel <- panel %>%
   mutate(
-    ln_co2pc_consumption           = log(co2pc_consumption),
-    ln_co2pc_consumption_wid       = log(co2pc_consumption_wid),
-    ln_wealth_top1      = log(wealth_top1),
-    ln_wealth_top10     = log(wealth_top10),
-    ln_gdp_pc           = log(gdp_pc),
-    ln_gdp_pc_sq        = log(gdp_pc)^2,
-    ln_preinc_gini      = log(preinc_gini),
-    ln_postinc_gini     = log(postinc_gini)
-  ) %>%
-  arrange(iso3c, year) %>%
-  group_by(iso3c) %>%
-  mutate(
-    ln_wealth_top1_lag1 = lag(ln_wealth_top1, 1),
-    ln_wealth_top1_lag2 = lag(ln_wealth_top1, 2),
-    ln_co2_pc_lag1      = lag(ln_co2_pc, 1)
-  ) %>%
-  ungroup()
+    ln_co2pc_territorial = log(co2pc_territorial),
+    ln_co2pc_territorial_wid = log(co2pc_territorial_wid),
+    ln_co2pc_consumption = log(co2pc_consumption),
+    ln_co2pc_consumption_wid = log(co2pc_consumption_wid),
+    ln_ghgpc_territorial_excluc = log(ghgpc_territorial_excluc),
+    ln_ghgpc_territorial_wid = log(ghgpc_territorial_wid),
+    
+    ln_wealth_top10 = log(wealth_top10),
+    ln_wealth_top1 = log(wealth_top1),
+    ln_wealth_rest9 = log(wealth_rest9),
+    ln_preinc_gini = log(preinc_gini),
+    ln_postinc_gini = log(postinc_gini),
+    
+    ln_gdppc = log(gdppc),
+    gdppc_sq = gdppc^2,
+    ln_gdppc_sq = ln_gdppc^2,
+    ln_urban = log(urban),
+    ln_age_dep = log(age_dep),
+  )
 
-pdata <- pdata.frame(panel, index = c("iso3c", "year"))
-print(pdim(pdata))
+desc_table <- function(df, vars, digits = 3) {
+  df %>%
+    select(all_of(vars)) %>%
+    pivot_longer(everything(), names_to = "Variable", values_to = "value") %>%
+    group_by(Variable) %>%
+    summarise(
+      N        = sum(!is.na(value)),
+      Mean     = round(mean(value, na.rm = TRUE), digits),
+      SD       = round(sd(value, na.rm = TRUE), digits),
+      Min      = round(min(value, na.rm = TRUE), digits),
+      Median   = round(median(value, na.rm = TRUE), digits),
+      Max      = round(max(value, na.rm = TRUE), digits),
+      Skewness = round(skewness(value, na.rm = TRUE), digits),
+      Kurtosis = round(kurtosis(value, na.rm = TRUE), digits),
+      .groups  = "drop"
+    ) %>%
+    mutate(Variable = factor(Variable, levels = vars)) %>%
+    arrange(Variable) %>%
+    as.data.frame()
+}
 
-diag_vars <- c("ln_co2_pc", "ln_wid_co2_pc",
-               "ln_wealth_top1", "ln_wealth_top10",
-               "ln_gdp_pc", "preinc_gini", "postinc_gini")
+# ── define variable groups ────────────────────────────────────────
+level_vars <- c(
+  "co2pc_consumption", "co2pc_consumption_wid", "co2pc_territorial_wid", "ghgpc_territorial_excluc",
+  "wealth_top1", "wealth_top10",
+  "gdppc", "preinc_gini", "postinc_gini"
+)
 
-# 1.1 Descriptive statistics 
+log_vars <- c(
+  "ln_co2pc_consumption", "ln_co2pc_consumption_wid", "ln_co2pc_territorial_wid", "ln_ghgpc_territorial_excluc",
+  "ln_wealth_top1", "ln_wealth_top10",
+  "ln_gdppc",
+  "ln_preinc_gini", "ln_postinc_gini"
+)
 
-desc_stats <- panel %>%
-  select(all_of(diag_vars)) %>%
-  summarise(across(everything(), list(
-    N        = ~sum(!is.na(.)),
-    Mean     = ~round(mean(.,     na.rm = TRUE), 3),
-    SD       = ~round(sd(.,       na.rm = TRUE), 3),
-    Min      = ~round(min(.,      na.rm = TRUE), 3),
-    Max      = ~round(max(.,      na.rm = TRUE), 3),
-    Skewness = ~round(skewness(., na.rm = TRUE), 3),
-    Kurtosis = ~round(kurtosis(., na.rm = TRUE), 3)
-  ))) %>%
-  pivot_longer(
-    everything(),
-    names_to  = c("Variable", "Stat"),
-    names_sep = "_(?=[^_]+$)"
-  ) %>%
-  pivot_wider(names_from = Stat, values_from = value)
-print(desc_stats)
+# ── suppress scientific notation globally ─────────────────────────
+old_scipen <- getOption("scipen")
+options(scipen = 999)
+
+# ── produce the two tables ────────────────────────────────────────
+cat("\n══ Panel dimensions ══\n")
+cat("Countries:", n_distinct(panel$iso3c), " | ",
+    "Years:",    n_distinct(panel$year),   " | ",
+    "Obs:",      nrow(panel), "\n\n")
+
+cat("══ A. Descriptive statistics — levels ══\n")
+desc_levels <- desc_table(panel, level_vars)
+print.data.frame(desc_levels, row.names = FALSE)
+
+cat("\n══ B. Descriptive statistics — log-transformed ══\n")
+desc_logs <- desc_table(panel, log_vars)
+print.data.frame(desc_logs, row.names = FALSE)
+
+# ── restore original setting ──────────────────────────────────────
+options(scipen = old_scipen)
 
 # 1.2 Jarque-Bera Normality Tests
 for (v in diag_vars) {
