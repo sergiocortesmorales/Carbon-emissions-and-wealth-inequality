@@ -23,247 +23,203 @@ panel <- panel %>%
     ln_urban = log(urban),
     ln_age_dep = log(age_dep),
   )
-##########################
-### PRAIS-WINSTEN 2WFE ###
-##########################
-#Driscoll-Drakay SE would be better #*#*#*#*#??
-###################################################################
-### CO2 COMP WID ~ W TOP 10%
-# prais-winsten coefficients
-rpw_co2wid <- prais_winsten(
-  ln_co2pc_consumption_wid ~ ln_wealth_top10 + ln_gdppc + ln_preinc_gini +
-  factor(iso3c) + factor(year),
+
+#############################################
+#############################################
+### PRAIS-WINSTEN AND DRISCOLL-KRAAY 2WFE ###
+#############################################
+#############################################
+
+#############################################
+#############################################
+### Using CO2 Consumption from WID ##########
+#############################################
+#############################################
+
+#---CO2 Consumption ~ W TOP 10%---#
+#Prais-Winsten coefficients
+co2wid_top10_prais <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10 + 
+    ln_gdppc + ln_preinc_gini + factor(iso3c) + factor(year),
   data      = panel,
   index     = c("iso3c", "year"),
   panelwise = FALSE
 )
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2wid, pairwise = TRUE)
-trpw_co2wid <- coeftest(rpw_co2wid, vcov = vcov_corrected)
-trpw_co2wid <- trpw_co2wid[!grepl("factor", rownames(trpw_co2wid)), ]
-class(trpw_co2wid) <- "coeftest"
-trpw_co2wid # NON-SIGNIFICANT RELATION
-#DRISCOLL-KRAAY
-
-
-
-### CO2 COMP WID ~ W TOP 1%
-# prais-winsten coefficients
-rpw_co2wid <- prais_winsten(
-  ln_co2pc_consumption_wid ~ ln_wealth_top1 + ln_gdppc + ln_preinc_gini +
-  factor(iso3c) + factor(year),
-  data      = panel,
-  index     = c("iso3c", "year"),
-  panelwise = FALSE
-)
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2wid, pairwise = TRUE)
-trpw_co2wid <- coeftest(rpw_co2wid, vcov = vcov_corrected)
-trpw_co2wid <- trpw_co2wid[!grepl("factor", rownames(trpw_co2wid)), ]
-class(trpw_co2wid) <- "coeftest"
-trpw_co2wid # NON-SIGNIFICANT RELATION
-
-###################################################################
-### CO2 COMP WID ~ W TOP 10% Interact
-# prais-winsten coefficients
-rpw_co2_ekc <- prais_winsten(
-  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc + preinc_gini +
-  factor(iso3c) + factor(year),
-  data      = panel,
-  index     = c("iso3c", "year"),
-  panelwise = FALSE
-)
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
-trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
-trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
-class(trpw_co2_ekc) <- "coeftest"
-trpw_co2_ekc # SIGNIFICANT RELATION
-
-### CO2 COMP WID ~ WTOP1%*GDPPC
-# prais-winsten coefficients
-rpw_co2_ekc <- prais_winsten(
-  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc +
-  ln_preinc_gini +
-  factor(iso3c) + factor(year),
-  data      = panel,
-  index     = c("iso3c", "year"),
-  panelwise = FALSE
-)
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
-trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
-trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
-class(trpw_co2_ekc) <- "coeftest"
-trpw_co2_ekc
-
-#################### Adding controls #################
-### CO2 COMP WID ~ WTOP10%*GDPPC
-# prais-winsten coefficients
-rpw_co2_10 <- prais_winsten(
-  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc +
-  ln_preinc_gini + + pop_growth + ln_urban + ln_age_dep +
-  factor(iso3c) + factor(year),
-  data      = panel,
-  index     = c("iso3c", "year"),
-  panelwise = FALSE
-)
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2_10, pairwise = TRUE)
-trpw_co2_10 <- coeftest(rpw_co2_10, vcov = vcov_corrected)
-trpw_co2_10 <- trpw_co2_10[!grepl("factor", rownames(trpw_co2_10)), ]
-class(trpw_co2_10) <- "coeftest"
-trpw_co2_10
-#DRISCOLL-KRAAY SE
-fe_co2_dk_10 <- feols(
-  ln_co2pc_consumption_wid ~
-    ln_wealth_top10*ln_gdppc +
-    ln_preinc_gini +
-    pop_growth +
-    ln_urban +
-    ln_age_dep | iso3c + year,
+vcov_corrected <- prais:::vcovPC.prais(co2wid_top10_prais, pairwise = TRUE)# Get PCSE corrected vcov matrix
+co2wid_top10_prais <- coeftest(co2wid_top10_prais, vcov = vcov_corrected)
+co2wid_top10_prais <- co2wid_top10_prais[!grepl("factor", rownames(co2wid_top10_prais)), ]
+class(co2wid_top10_prais) <- "coeftest"
+tco2wid_top10_prais # Non significant
+#Driscoll-Kraay coefficients
+co2wid_top10_driscoll <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10 + 
+    ln_gdppc + ln_preinc_gini | iso3c + year,
   data     = panel,
   panel.id = ~iso3c + year,
   vcov     = "DK"
 )
-summary(fe_co2_dk_10)
+summary(co2wid_top10_driscoll)
 
-
-### CO2 COMP WID ~ WTOP1%*GDPPC - rest 9% controlled###
-# prais-winsten coefficients
-rpw_co2_1 <- prais_winsten(
-  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc +
-    ln_wealth_rest9 + ln_preinc_gini + pop_growth + ln_urban + ln_age_dep +
-    factor(iso3c) + factor(year),
+#---CO2 Consumption ~ W TOP 1%---#
+#Prais-Winsten coefficients
+co2wid_top1_prais <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1 + 
+    ln_gdppc + ln_preinc_gini + factor(iso3c) + factor(year),
   data      = panel,
   index     = c("iso3c", "year"),
   panelwise = FALSE
 )
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2_1, pairwise = TRUE)
-trpw_co2_1 <- coeftest(rpw_co2_1, vcov = vcov_corrected)
-trpw_co2_1 <- trpw_co2_1[!grepl("factor", rownames(trpw_co2_10)), ]
-class(trpw_co2_1) <- "coeftest"
-trpw_co2_1
-#DRISCOLL-KRAAY SE
+vcov_corrected <- prais:::vcovPC.prais(co2wid_top1_prais, pairwise = TRUE)# Get PCSE corrected vcov matrix
+co2wid_top1_prais <- coeftest(co2wid_top1_prais, vcov = vcov_corrected)
+co2wid_top1_prais <- co2wid_top1_prais[!grepl("factor", rownames(co2wid_top1_prais)), ]
+class(co2wid_top1_prais) <- "coeftest"
+co2wid_top1_prais # Non significant
+#Driscoll-Kraay coefficients
+co2wid_top1_driscoll <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1 + 
+    ln_gdppc + ln_preinc_gini | iso3c + year,
+  data     = panel,
+  panel.id = ~iso3c + year,
+  vcov     = "DK"
+)
+summary(co2wid_top1_driscoll)
+
+#---CO2 Consumption ~ W TOP 10% Interaction---#
+#Prais-Winsten coefficients
+co2wid_top10interaction_prais <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc + 
+    preinc_gini + factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+vcov_corrected <- prais:::vcovPC.prais(co2wid_top10interaction_prais, pairwise = TRUE)# Get PCSE corrected vcov matrix 
+co2wid_top10interaction_prais <- coeftest(co2wid_top10interaction_prais, vcov = vcov_corrected)
+co2wid_top10interaction_prais <- co2wid_top10interaction_prais[!grepl("factor", rownames(co2wid_top10interaction_prais)), ]
+class(co2wid_top10interaction_prais) <- "coeftest"
+co2wid_top10interaction_prais # Signficant
+#Driscoll-Kraay coefficients
+co2wid_top10interaction_driscoll <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc + 
+    ln_preinc_gini | iso3c + year,
+  data     = panel,
+  panel.id = ~iso3c + year,
+  vcov     = "DK"
+)
+summary(co2wid_top10interaction_driscoll)
+
+#---CO2 Consumption ~ W TOP 1% Interaction---#
+#Prais-Winsten coefficients
+co2wid_top1interaction_prais <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + 
+    preinc_gini + factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+vcov_corrected <- prais:::vcovPC.prais(co2wid_top1interaction_prais, pairwise = TRUE)# Get PCSE corrected vcov matrix 
+co2wid_top1interaction_prais <- coeftest(co2wid_top1interaction_prais, vcov = vcov_corrected)
+co2wid_top1interaction_prais <- co2wid_top1interaction_prais[!grepl("factor", rownames(co2wid_top1interaction_prais)), ]
+class(co2wid_top1interaction_prais) <- "coeftest"
+co2wid_top1interaction_prais # Signficant
+#Driscoll-Kraay coefficients
+co2wid_top1interaction_driscoll <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + 
+    ln_preinc_gini | iso3c + year,
+  data     = panel,
+  panel.id = ~iso3c + year,
+  vcov     = "DK"
+)
+summary(co2wid_top1interaction_driscoll)
+
+#################### Adding demographic controls #################
+
+#---CO2 Consumption ~ W TOP 10% Interaction + Dem controls ---#
+#Prais-Winsten coefficients
+co2wid_top10interaction_demcontrols_prais <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc +
+  ln_preinc_gini + + pop_growth + ln_urban + ln_age_dep + factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+vcov_corrected <- prais:::vcovPC.prais(co2wid_top10interaction_demcontrols_prais, pairwise = TRUE) # Get PCSE corrected vcov matrix
+co2wid_top10interaction_demcontrols_prais <- coeftest(co2wid_top10interaction_demcontrols_prais, vcov = vcov_corrected)
+co2wid_top10interaction_demcontrols_prais <- co2wid_top10interaction_demcontrols_prais[!grepl("factor", rownames(co2wid_top10interaction_demcontrols_prais)), ]
+class(co2wid_top10interaction_demcontrols_prais) <- "coeftest"
+co2wid_top10interaction_demcontrols_prais
+#Driscoll-Kraay coefficients
+co2wid_top10interaction_demcontrols_driscoll <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc +
+    ln_preinc_gini + pop_growth + ln_urban + ln_age_dep | iso3c + year,
+  data     = panel,
+  panel.id = ~iso3c + year,
+  vcov     = "DK"
+)
+summary(co2wid_top10interaction_demcontrols_driscoll)
+
+#---CO2 Consumption ~ W TOP 1% Interaction + Dem controls ---#
+#Prais-Winsten coefficients
+co2wid_top1interaction_demcontrols_prais <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc +
+    ln_preinc_gini + + pop_growth + ln_urban + ln_age_dep + factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+vcov_corrected <- prais:::vcovPC.prais(co2wid_top1interaction_demcontrols_prais, pairwise = TRUE) # Get PCSE corrected vcov matrix
+co2wid_top1interaction_demcontrols_prais <- coeftest(co2wid_top1interaction_demcontrols_prais, vcov = vcov_corrected)
+co2wid_top1interaction_demcontrols_prais <- co2wid_top1interaction_demcontrols_prais[!grepl("factor", rownames(co2wid_top1interaction_demcontrols_prais)), ]
+class(co2wid_top1interaction_demcontrols_prais) <- "coeftest"
+co2wid_top1interaction_demcontrols_prais
+#Driscoll-Kraay coefficients
+co2wid_top10interaction_demcontrols_driscoll <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc +
+    ln_preinc_gini + pop_growth + ln_urban + ln_age_dep | iso3c + year,
+  data     = panel,
+  panel.id = ~iso3c + year,
+  vcov     = "DK"
+)
+summary(co2wid_top1interaction_demcontrols_driscoll)
+
+################# Controlling rest 9% when modelling top 1% ##################
+
+#---CO2 Consumption ~ W TOP 1% Interaction + next 9% + Dem controls ---#
+#Prais-Winsten coefficients
+co2wid_top1interaction_demcontrols_next9_prais <- prais_winsten(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc +
+    ln_wealth_rest9 + ln_preinc_gini + pop_growth + ln_urban + ln_age_dep + factor(iso3c) + factor(year),
+  data      = panel,
+  index     = c("iso3c", "year"),
+  panelwise = FALSE
+)
+vcov_corrected <- prais:::vcovPC.prais(co2wid_top1interaction_demcontrols_next9_prais, pairwise = TRUE)# Get PCSE corrected vcov matrix
+co2wid_top1interaction_demcontrols_next9_prais <- coeftest(co2wid_top1interaction_demcontrols_next9_prais, vcov = vcov_corrected)
+co2wid_top1interaction_demcontrols_next9_prais <- co2wid_top1interaction_demcontrols_next9_prais[!grepl("factor", rownames(co2wid_top1interaction_demcontrols_next9_prais)), ]
+class(co2wid_top1interaction_demcontrols_next9_prais) <- "coeftest"
+co2wid_top1interaction_demcontrols_next9_prais
+#Driscoll-Kraay coefficients
+
+co2wid_top1interaction_demcontrols_next9_prais <- feols(
+  ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + ln_wealth_rest9 +
+    ln_preinc_gini + pop_growth + ln_urban + ln_age_dep | iso3c + year,
+  data     = panel,
+  panel.id = ~iso3c + year,
+  vcov     = "DK"
+)
+summary(co2wid_top1interaction_demcontrols_next9_prais)
+
 # Newey-West 1987 — most common default
 #lag = "NW1987"    # gives floor(4 * (T/100)^(2/9))
 #
 # Newey-West 1994 — slightly more generous
 #lag = "NW1994"    # gives floor(4 * (T/100)^(4/25))
-fe_co2_dk_1 <- feols(
-  ln_co2pc_consumption_wid ~
-    ln_wealth_top1*ln_gdppc +
-    ln_wealth_rest9 +
-    ln_preinc_gini +
-    pop_growth +
-    ln_urban +
-    ln_age_dep | iso3c + year,
-  data     = panel,
-  panel.id = ~iso3c + year,
-  vcov     = "DK"
-)
-summary(fe_co2_dk_1)
-
-# Helper function
-extract_results <- function(obj, label) {
-  if (inherits(obj, "coeftest")) {
-    df <- as.data.frame(unclass(obj))
-    names(df) <- c("Estimate", "SE", "t", "p")
-    library(kableExtra)
-    
-    # Helper function
-    extract_results <- function(obj, label) {
-      if (inherits(obj, "coeftest")) {
-        df <- as.data.frame(unclass(obj))
-        names(df) <- c("Estimate", "SE", "t", "p")
-      } else {
-        s <- summary(obj)
-        df <- data.frame(Estimate = coef(s), SE = se(s), t = tstat(s), p = pvalue(s))
-      }
-      df$Variable <- rownames(df)
-      df$Model <- label
-      rownames(df) <- NULL
-      df
-    }
-    
-    results <- bind_rows(
-      extract_results(trpw_co2_10, "PW+PCSE (Top10%)"),
-      extract_results(fe_co2_dk_10, "DK (Top10%)"),
-      extract_results(trpw_co2_1,  "PW+PCSE (Top1%)"),
-      extract_results(fe_co2_dk_1, "DK (Top1%)")
-    ) %>%
-      filter(!grepl("factor|Intercept", Variable))
-    
-    # Clean variable names
-    name_map <- c(
-      "ln_wealth_top10"            = "Wealth Top 10% (ln)",
-      "ln_gdppc"                   = "GDP per capita (ln)",
-      "ln_wealth_top10:ln_gdppc"   = "Top 10% × GDP pc",
-      "ln_preinc_gini"             = "Pre-tax Gini (ln)",
-      "pop_growth"                 = "Population Growth",
-      "ln_urban"                   = "Urbanisation (ln)",
-      "ln_age_dep"                 = "Age Dependency (ln)",
-      "ln_wealth_top1"             = "Wealth Top 1% (ln)",
-      "ln_wealth_rest9"            = "Wealth Next 9% (ln)",
-      "ln_wealth_top1:ln_gdppc"    = "Top 1% × GDP pc"
-    )
-    results$Variable <- ifelse(results$Variable %in% names(name_map),
-                               name_map[results$Variable], results$Variable)
-    
-    # Format cells: coeff with stars, SE in parentheses below
-    results <- results %>%
-      mutate(
-        stars = case_when(p < 0.01 ~ "***", p < 0.05 ~ "**", p < 0.1 ~ "*", TRUE ~ ""),
-        cell  = paste0(sprintf("%.4f", Estimate), stars, "<br><small>(", sprintf("%.4f", SE), ")</small>")
-      ) %>%
-      select(Variable, Model, cell) %>%
-      pivot_wider(names_from = Model, values_from = cell, values_fill = "—")
-    
-    # Define desired row order
-    row_order <- c(
-      "Wealth Top 10% (ln)", "Wealth Top 1% (ln)", "Wealth Next 9% (ln)",
-      "GDP per capita (ln)", "Top 10% × GDP pc", "Top 1% × GDP pc",
-      "Pre-tax Gini (ln)", "Population Growth", "Urbanisation (ln)", "Age Dependency (ln)"
-    )
-    results <- results %>%
-      mutate(order = match(Variable, row_order)) %>%
-      arrange(order) %>%
-      select(-order)
-    
-    # Build HTML table
-    results %>%
-      kbl(
-        format    = "html",
-        escape    = FALSE,
-        caption   = "Table X. Wealth Inequality and CO₂ Emissions per Capita (Consumption-Based)",
-        col.names = c("", "PW+PCSE", "FE+DK", "PW+PCSE", "FE+DK"),
-        align     = c("l", "c", "c", "c", "c")
-      ) %>%
-      kable_classic(full_width = FALSE, html_font = "Cambria") %>%
-      add_header_above(c(" " = 1, "Top 10% Specification" = 2, "Top 1% Specification" = 2)) %>%
-      footnote(
-        general = c(
-          "Standard errors in parentheses. *** p<0.01, ** p<0.05, * p<0.1",
-          "PW+PCSE = Prais-Winsten 2WFE with Panel-Corrected SE (Beck & Katz 1995; Knight et al. 2017)",
-          "FE+DK = OLS 2WFE with Driscoll-Kraay SE, using lag=2",
-          "Dependent variable: ln(CO₂ per capita, consumption-based). All continuous variables in logs except Population Growth."
-        ),
-        general_title = "Notes: "
-      ) %>%
-      save_kable("regression_table.html")
-    
-    browseURL("regression_table.html")save_kable("regression_table.html")
-
-browseURL("regression_table.html")
-
-
 #################### Adding TRADE OPENESS AND INSTITUTIONAL #################
 #################### TRADE FROM CEPII OR PWT ################################
 #################### INSTI FROM V-DEM,QoG(ht_ipolity2),Freedom house,ICRG ###
 #################### Why renewable energy?
-### CO2 COMP WID ~ WTOP10%*GDPPC
-# prais-winsten coefficients
+#---CO2 Consumption ~ WTOP10%*GDPPC---#
+#Prais-Winsten coefficients
 rpw_co2_ekc <- prais_winsten(
   ln_co2pc_consumption_wid ~ ln_wealth_top10*ln_gdppc +
     ln_preinc_gini + pop_growth + ln_urban + ln_age_dep +
@@ -272,15 +228,15 @@ rpw_co2_ekc <- prais_winsten(
   index     = c("iso3c", "year"),
   panelwise = FALSE
 )
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE) # Get PCSE corrected vcov matrix
 trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
 trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
 class(trpw_co2_ekc) <- "coeftest"
 trpw_co2_ekc
+#Driscoll-Kraay coefficients
 
-### CO2 COMP WID ~ WTOP1%*GDPPC - rest 9% controlled
-# prais-winsten coefficients
+#---CO2 Consumption ~ WTOP1%*GDPPC - rest 9% controlled
+#Prais-Winsten coefficients
 rpw_co2_ekc <- prais_winsten(
   ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + ln_wealth_rest9 +
     ln_preinc_gini + pop_growth + ln_urban + ln_age_dep +
@@ -289,12 +245,12 @@ rpw_co2_ekc <- prais_winsten(
   index     = c("iso3c", "year"),
   panelwise = FALSE
 )
-# Get PCSE corrected vcov matrix
-vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE)
+vcov_corrected <- prais:::vcovPC.prais(rpw_co2_ekc, pairwise = TRUE) # Get PCSE corrected vcov matrix
 trpw_co2_ekc <- coeftest(rpw_co2_ekc, vcov = vcov_corrected)
 trpw_co2_ekc <- trpw_co2_ekc[!grepl("factor", rownames(trpw_co2_ekc)), ]
 class(trpw_co2_ekc) <- "coeftest"
 trpw_co2_ekc
+#Driscoll-Kraay coefficients
 
 #########################################################
 ################## Drop tests ###########################
@@ -396,7 +352,7 @@ abline(v = 0, col = "red", lty = 2, lwd = 2)
 ####################### Feols ############################
 ##########################################################
 
-### CO2 COMP WID ~ WTOP1%*GDPPC - rest 9% controlled
+### CO2 Consumption ~ WTOP1%*GDPPC - rest 9% controlled
 
 rfe_co2_ekc <- feols(
   ln_co2pc_consumption_wid ~ ln_wealth_top1*ln_gdppc + ln_wealth_rest9 +
